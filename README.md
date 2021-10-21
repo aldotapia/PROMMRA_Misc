@@ -1,1 +1,2 @@
-# Testing project
+# Functions repository
+
