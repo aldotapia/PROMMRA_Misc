@@ -193,7 +193,7 @@ realizar el procedimiento.
 ``` r
 l3 <- list()
 
-for(i in 838:dim(df_temp4)[1]){
+for(i in 1:dim(df_temp4)[1]){
   fuente_ <- df_temp4$FUENTE[i]
   ix_ <- which(fuente_ == FUENTE)
   year_ <- df_temp4$Tyear[i]
