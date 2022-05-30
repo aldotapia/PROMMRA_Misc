@@ -30,6 +30,26 @@ import os
 Initial configuration
 '''
 
+# flow sensor gpio
+FLOW_SENSOR_GPIO = 13
+
+# configure GPIO 
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(FLOW_SENSOR_GPIO, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+
+# set global variable for counting pulses
+global count
+count = 0
+ 
+def countPulse(channel):
+    '''count pulses from flowmeter'''
+    global count
+    if start_counter == 1:
+        count = count+1
+
+# add event for flowmeter
+GPIO.add_event_detect(FLOW_SENSOR_GPIO, GPIO.FALLING, callback=countPulse)
+
 # create the I2C bus
 i2c = busio.I2C(board.SCL, board.SDA)
 
@@ -40,7 +60,6 @@ ads = ADS.ADS1115(i2c, gain = 2/3)
 chan0 = AnalogIn(ads, ADS.P0)
 chan1 = AnalogIn(ads, ADS.P1)
 chan2 = AnalogIn(ads, ADS.P0)
-chan3 = AnalogIn(ads, ADS.P1)
 
 '''
 paths and values settings
@@ -54,6 +73,8 @@ watertank_height = 168
 watertank_diameter = 166
 # US sensor distance from water tank bottom, in mm
 maxdist = 1660
+# seconds for flowmeter
+seconds_fm = 10
 
 # site for post
 site = ''
@@ -77,10 +98,10 @@ def piezometer(x,piezometer_deep):
     well_depth = piezometer_deep - water_column*100
     return round(well_depth,2)
    
-def flowmeter(x):
+def flowmeter(x, seconds):
     '''convert data from flowmeter'''
-    vg = x.voltage
-    return round(vg,2)
+    flow = (x / (5 * seconds)) 
+    return round(flow,2)
    
 def pressure_sensor(x):
     '''convert data from preasure sensor (in bar)'''
@@ -137,15 +158,34 @@ if __name__ == '__main__':
    
     # get current time
     actualtime = time.localtime()
+    minute_test = actualtime.tm_min
+
+    print(f'Starting!. Current date: {time.strftime("%Y-%m-%d %H:%M:%S", actualtime)}')
    
     while True:
         try:
-            if actualtime.tm_min % 2 == 0:
+            if actualtime.tm_min != minute_test:
                 # pull values
-                pzv = piezometer(x = chan0,piezometer_deep = piezometer_deep)
-                fmv = flowmeter(x = chan1)
-                psv = pressure_sensor(x = chan2)
-                wtv = watertank(x = chan3, maxdist = maxdist, wtd = watertank_diameter)
+                start_counter = 1
+                time.sleep(seconds_fm)
+                start_counter = 0
+                
+                try:
+                    pzv = piezometer(x = chan0,piezometer_deep = piezometer_deep)
+                except:
+                    pzv = -999
+                try:
+                    fmv = flowmeter(count, seconds_fm)
+                except:
+                    fmv = -999
+                try:
+                    psv = pressure_sensor(x = chan2)
+                except:
+                    psv = -999
+                try:
+                    wtv = watertank(x = chan1, maxdist = maxdist, wtd = watertank_diameter)
+                except:
+                    wtv = -999
                
                 # post to database
                 post_management(timevalue = actualtime,
@@ -163,8 +203,9 @@ if __name__ == '__main__':
                                 psv = psv,
                                 wtv = wtv)
                
-                # break script at least 70 seconds
-                time.sleep(61)
+                # reset count and save current minute
+                count = 0
+                minute_test = actualtime.tm_min
                 actualtime = time.localtime()
             else:
                 actualtime = time.localtime()
