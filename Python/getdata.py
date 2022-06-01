@@ -68,13 +68,17 @@ paths and values settings
 # piezometer deep from soil, in cm
 piezometer_deep = 150 # test, change for real value
 # water tank height, in cm
-watertank_height = 168
-# water tank diameter, in cm
-watertank_diameter = 166
+watertank_maxheight = 168
+# water tank deadzone, in cm
+watertank_minheight = 8
+# water tank max diameter, in cm
+watertank_maxdiameter = 83
+# water tank min diameter, in cm
+watertank_mindiameter = 83
 # US sensor distance from water tank bottom, in mm
-maxdist = 1660
+maxdist = 1670
 # seconds for flowmeter
-seconds_fm = 10
+seconds_fm = 30
 
 # site for post
 site = ''
@@ -114,13 +118,14 @@ def pressure_sensor(x):
         pressure = (vg - 0.5) * 3
     return round(pressure,2)
    
-def watertank(x, maxdist, wtd):
+def watertank(x, maxdist, maxheight, minheight, R, r):
     '''measure water level tank in mm'''
     vg = x.voltage
     distance = vg/(5/5120)
     level_mm = maxdist - distance
     level_cm = level_mm / 10
-    storage_volume_cm = math.pi * ((wtd/2) ** 2) * level_cm
+    r_prime = (level_cm - minheight) * ((R-r)/(maxheight - minheight)) + r
+    storage_volume_cm = ((math.pi * level_cm)/ 3) * (R ** 2 + r ** 2 + R * r)
     storage_volume_l = int(storage_volume_cm / 1000)    
     return round(storage_volume_l)
    
@@ -143,10 +148,6 @@ def line_management(timevalue, database, pzv, fmv, psv, wtv):
     print('data saved')
        
 if __name__ == '__main__':
-    # Calculate water tank volume
-    tank_volume_cm = math.pi * ((watertank_diameter/2) ** 2) * watertank_height
-    tank_volume_l = int(tank_volume_cm / 1000)
-   
     # Check or create database    
     if os.path.exists(database_path):
         print('Database found, using ' + database_path)
@@ -171,7 +172,8 @@ if __name__ == '__main__':
                 start_counter = 0
                 
                 try:
-                    pzv = piezometer(x = chan0,piezometer_deep = piezometer_deep)
+                    pzv = piezometer(x = chan0,
+                        piezometer_deep = piezometer_deep)
                 except:
                     pzv = -999
                 try:
@@ -183,7 +185,12 @@ if __name__ == '__main__':
                 except:
                     psv = -999
                 try:
-                    wtv = watertank(x = chan1, maxdist = maxdist, wtd = watertank_diameter)
+                    wtv = watertank(x = chan1,
+                        maxdist = maxdist,
+                        maxheight = watertank_maxheight,
+                        minheight = watertank_minheight,
+                        R = watertank_maxdiameter,
+                        r = watertank_mindiameter)
                 except:
                     wtv = -999
                
