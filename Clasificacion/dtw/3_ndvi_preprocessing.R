@@ -91,4 +91,6 @@ for(i in seq_along(ndvi_files)){
 
 r_summary <- do.call(rbind.data.frame, r_log)
 
+r_summary <- r_summary[order(r_summary$date),]
+
 write.csv(r_summary, '~/Documents/1_dtw/results/ndvi_clouds.csv')
