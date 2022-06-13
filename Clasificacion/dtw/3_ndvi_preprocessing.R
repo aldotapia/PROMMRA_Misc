@@ -30,13 +30,6 @@ scl_date <- gsub(pattern = '.tif',
 scl_date <- as.Date(scl_date,
                     format = '%Y-%j')
 
-ndvi_files <- ndvi_files[order(file_date)]
-scl_date <- scl_files[order(scl_date)]
-file_doy <- file_doy[order(file_date)]
-file_date <- file_date[order(file_date)]
-scl_doy <- scl_doy[order(scl_date)]
-scl_date <- scl_date[order(scl_date)]
-
 polys <- vect('~/Documents/1_dtw/vectors/zones.shp')
 
 r_log <- list()
@@ -61,15 +54,14 @@ for(i in seq_along(ndvi_files)){
     cloud_med <- round(sum(values(scl_crop == 8))/total_cells,3)
     cirrus <- round(sum(values(scl_crop == 10))/total_cells,3)
     
-    r_log[[i]][[j]] <- data.frame(filename = paste0('ndvi_',
-                                                      file_doy[i]),
-                                  date = file_date[i],
-                                  zone_id = id_name,
-                                  cloud_high = cloud_high,
-                                  cloud_med = cloud_med,
-                                  cirrus = cirrus)
     
-    if(cloud_high == 0 & cloud_med == 0 & cirrus <= 0.05){
+    
+    if(cloud_high > 0 | cloud_med > 0 | cirrus >= 0.05){
+      decision <- 'out'
+    }else{
+      
+      decision <- 'in'
+      
       fname <- paste0('~/Documents/1_dtw/scenes/NDVI cropped/',
                       id_name,
                       '_ndvi_',
@@ -81,6 +73,15 @@ for(i in seq_along(ndvi_files)){
                   gdal=c("COMPRESS=LZW"),
                   overwrite = TRUE)
     }
+    
+    r_log[[i]][[j]] <- data.frame(filename = paste0('ndvi_',
+                                                    file_doy[i]),
+                                  date = file_date[i],
+                                  zone_id = id_name,
+                                  cloud_high = cloud_high,
+                                  cloud_med = cloud_med,
+                                  cirrus = cirrus,
+                                  decision = decision)
   }
   
   r_log[[i]] <- do.call(rbind.data.frame,r_log[[i]])
