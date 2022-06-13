@@ -56,7 +56,7 @@ for(i in seq_along(ndvi_files)){
     
     
     
-    if(cloud_high > 0 | cloud_med > 0 | cirrus >= 0.05){
+    if(cloud_high > 0.01 | cloud_med > 0.05 | cirrus >= 0.1){
       decision <- 'out'
     }else{
       
