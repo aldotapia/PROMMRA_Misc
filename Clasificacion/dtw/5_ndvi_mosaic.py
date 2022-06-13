@@ -20,7 +20,7 @@ rasters = [value.split('_')[-1] for value in files if value.endswith('.tif')]
 patterns = list(set(rasters))
 
 for pattern in patterns:
-    rs_temp = [value for value in files if value.endswith(test)]
+    rs_temp = [value for value in files if value.endswith(pattern)]
     r_single = []
     for r_temp in rs_temp:
         rpath = os.path.join(mainpath, r_temp)
