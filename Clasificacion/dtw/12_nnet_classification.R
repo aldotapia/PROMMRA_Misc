@@ -131,7 +131,7 @@ model_testing_max <- apply(model_testing_prob,
                            FUN = function(x) max(x, na.rm = T))
 
 model_sum <- data.frame(observed = for_testing[,1],
-                        modeled = mode_testing_raw,
+                        modeled = model_testing_raw,
                         probability = model_testing_max)
 
 model_sum %>%
