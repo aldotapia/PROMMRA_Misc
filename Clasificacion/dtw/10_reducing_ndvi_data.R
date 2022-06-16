@@ -20,7 +20,7 @@ raster_spline_monthly <- function(x,times) {
                       list(format(as.Date(seq(from = 18748,
                                               to = 19112,
                                               by = 5),
-                                          origin = "1964-10-22"),
+                                          origin = "1970-01-01"),
                                   "%Y-%m")),
                       mean)[,'x']
     vals[which(vals < 0)] <- -10
