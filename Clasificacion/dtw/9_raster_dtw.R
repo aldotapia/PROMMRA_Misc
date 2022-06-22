@@ -1,6 +1,6 @@
 library(TSdist)
+library(dtw)
 library(terra)
-library(purrr)
 library(dplyr)
 library(parallel)
 
@@ -14,29 +14,30 @@ samples <- samples %>%
             by = c('crop')) %>%
   select(class,
          ID,
+         crop,
          Date,
          Median.NDVI) %>% 
   mutate(Date = as.numeric(as.Date(Date)))
 
 samples %>%
-  group_by(ID) %>% 
+  group_by(crop,ID) %>% 
   group_map(~ smooth.spline(x = .x$Date,
                             y = .x$Median.NDVI)) -> spline_funs
 
-newx <- seq(from = min(samples$Date), to = max(samples$Date), by=15)
+samples %>%
+  group_by(crop,ID) %>%
+  summarise() -> cnames
+
+names(spline_funs) <- cnames$crop
+
+newx <- seq(from = as.numeric(as.Date('2021-05-01')),
+            to = as.numeric(as.Date('2022-04-30')),
+            by=15)
 
 newx <- round(newx)
 
 lapply(spline_funs, FUN = function(y) predict(y, newx) %>%
          cbind.data.frame() %>% mutate(y = round(y))) -> smoothed_samples
-
-samples %>%
-  group_by(class,ID) %>%
-  summarise() %>%
-  ungroup() %>% 
-  select(class) %>%
-  unlist() %>% 
-  as.vector() -> finalclass
 
 ndvi_files <- list.files('~/Documents/1_dtw/scenes/NDVI cropped fixed/',
                       pattern = '.tif$',
@@ -57,33 +58,29 @@ file_date <- substr(file_name,
 file_date <- as.Date(file_date,
                      format = '%Y-%m-%d')
 
-dtw_irregular <- function(x, rasterdates, samplelist, fclass){
+dtw_irregular <- function(x, rasterdates, samplelist){
   
-  rasterdates <- rasterdates[!is.na(x)]
+  vals <- rep(0, times = length(samplelist))
   
-  r_dates <- as.numeric(r_dates)
-  
-  x <- x[!is.na(x)]
-  
-  vals <- c(0,0)
-  
-  lapply(samplelist, FUN= function(z) TSDistances(x = x,
-                                    y = z$y,
-                                    tx = r_dates,
-                                    ty = z$x,
-                                    distance = 'dtw',
-                                    step.pattern = asymmetric,
-                                    window.type = 'itakura',
-                                    open.end=T,
-                                    open.begin=T,
-                                    distance.only = T)) %>% 
-    unlist() -> result
-  
-  vals[1] <- fclass[which.min(result)]
-  vals[2] <- round(result[which.min(result)])
+  try({
+    result = lapply(samplelist,
+                    FUN= function(z) TSdist::TSDistances(x = x,
+                                                         y = z$y,
+                                                         tx = rasterdates,
+                                                         ty = z$x,
+                                                         distance = 'dtw',
+                                                         step.pattern = dtw::asymmetric,
+                                                         window.type = 'none',
+                                                         open.end=T,
+                                                         open.begin=T,
+                                                         distance.only = T))
+    vals <- unlist(result)
+    
+  })
   
   vals
 }
+
 
 for(i in seq_along(id)){
   ix <- ids == id[i]
@@ -94,29 +91,21 @@ for(i in seq_along(id)){
   
   r_stack <- rast(r_files)
 
-  r_df <- as.data.frame(r_stack)
-  
-  r_ls <- split(r_df,seq(nrow(r_df)))
-  
+  cl <- makeCluster(12, type = 'PSOCK')
+  clusterExport(cl, "r_dates")
+  clusterExport(cl, "smoothed_samples")
   s3b <- system.time({
-    mn <- mclapply(r_ls, function(x) {
-      dtw_irregular(x,r_dates,smoothed_samples,finalclass)
-    }, mc.cores = 8)
+    r_final <- app(x = r_stack,
+                   fun = dtw_irregular,
+                   rasterdates = r_dates,
+                   samplelist = smoothed_samples,
+                   cores = cl)
   })
+  stopCluster(cl)
   
   print(s3b)
   
-  result_df <- do.call(rbind.data.frame, mn)
-  names(result_df) <- c('class','value')
-  
-  r_template <- r_stack[[1]]
-  
-  r_class <- setValues(r_template, result_df$class)
-  r_value <- setValues(r_template, result_df$value)
-  
-  r_final <- c(r_class, r_value)
-  
-  names(r_final) <- c('class','value')
+  names(r_final) <- paste0('lyr',1:24)
   
   writeRaster(r_final,
               fnm,
